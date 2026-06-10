@@ -1,0 +1,10 @@
+node_modules/
+frontend/node_modules/
+
+mysql/
+
+cypress/screenshots/
+cypress/videos/
+
+frontend/cypress/
+frontend/cypress.config.ts
