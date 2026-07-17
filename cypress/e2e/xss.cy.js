@@ -12,36 +12,76 @@ describe('Tests de sécurité XSS Eco Bliss Bath', () => {
       }
     }).then((response) => {
       expect(response.status).to.eq(200)
+      expect(response.body).to.have.property('token')
+
       return response.body.token
     })
   }
 
   it('Vérifie qu’un script injecté dans un avis ne s’exécute pas', () => {
     const xssPayload = '<script>alert("XSS")</script>'
+    const reviewTitle = `Test XSS ${Date.now()}`
     let alertTriggered = false
 
     cy.on('window:alert', () => {
       alertTriggered = true
     })
 
-    cy.visit(frontUrl)
+    cy.visit(`${frontUrl}/#/login`)
 
-    cy.contains('Connexion').click()
-    cy.get('[data-cy="login-input-username"]').type('test2@test.fr')
-    cy.get('[data-cy="login-input-password"]').type('testtest')
-    cy.get('[data-cy="login-submit"]').click({ force: true })
+    cy.get('[data-cy="login-input-username"]')
+      .should('be.visible')
+      .type('test2@test.fr')
+
+    cy.get('[data-cy="login-input-password"]')
+      .should('be.visible')
+      .type('testtest')
+
+    cy.get('[data-cy="login-submit"]')
+      .should('be.visible')
+      .click({ force: true })
+
+    cy.window().should((window) => {
+      expect(window.localStorage.getItem('user')).to.exist
+    })
 
     cy.visit(`${frontUrl}/#/reviews`)
 
-    cy.get('[data-cy="review-input-rating-images"] img').eq(4).click()
-    cy.get('[data-cy="review-input-title"]').type('Test XSS')
-    cy.get('[data-cy="review-input-comment"]').type(xssPayload, {
-      parseSpecialCharSequences: false
+    cy.get('[data-cy="review-form"]', { timeout: 10000 })
+      .should('be.visible')
+
+    cy.get('[data-cy="review-input-rating-images"] img')
+      .should('have.length', 5)
+      .eq(4)
+      .click()
+
+    cy.get('[data-cy="review-input-title"]')
+      .type(reviewTitle)
+
+    cy.get('[data-cy="review-input-comment"]')
+      .type(xssPayload, {
+        parseSpecialCharSequences: false
+      })
+
+    cy.get('[data-cy="review-submit"]')
+      .click({ force: true })
+
+    cy.contains('[data-cy="review-title"]', reviewTitle, {
+      timeout: 10000
     })
+      .should('be.visible')
+      .parents('[data-cy="review-detail"]')
+      .within(() => {
+        cy.get('[data-cy="review-comment"]')
+          .find('script')
+          .should('not.exist')
 
-    cy.get('[data-cy="review-submit"]').click({ force: true })
+        cy.get('[data-cy="review-comment"]')
+          .invoke('html')
+          .should('not.include', '<script')
+      })
 
-    cy.wrap(null).then(() => {
+    cy.then(() => {
       expect(alertTriggered).to.eq(false)
     })
   })
@@ -51,9 +91,11 @@ describe('Tests de sécurité XSS Eco Bliss Bath', () => {
 
     login().then((token) => {
       cy.request(`${apiUrl}/products`).then((productsResponse) => {
-        const product = productsResponse.body.find((item) => item.availableStock > 0)
+        expect(productsResponse.status).to.eq(200)
+        expect(productsResponse.body).to.be.an('array')
+        expect(productsResponse.body.length).to.be.greaterThan(0)
 
-        expect(product, 'Produit disponible').to.exist
+        const product = productsResponse.body[0]
 
         cy.request({
           method: 'PUT',

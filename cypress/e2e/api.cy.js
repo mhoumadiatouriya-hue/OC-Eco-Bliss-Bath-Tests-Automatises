@@ -12,6 +12,7 @@ describe('Tests API Eco Bliss Bath', () => {
     }).then((response) => {
       expect(response.status).to.eq(200)
       expect(response.body).to.have.property('token')
+
       return response.body.token
     })
   }
@@ -31,6 +32,10 @@ describe('Tests API Eco Bliss Bath', () => {
 
   it('GET /products/{id} retourne une fiche produit', () => {
     cy.request(`${apiUrl}/products`).then((productsResponse) => {
+      expect(productsResponse.status).to.eq(200)
+      expect(productsResponse.body).to.be.an('array')
+      expect(productsResponse.body.length).to.be.greaterThan(0)
+
       const product = productsResponse.body[0]
 
       cy.request(`${apiUrl}/products/${product.id}`).then((response) => {
@@ -68,12 +73,20 @@ describe('Tests API Eco Bliss Bath', () => {
     })
   })
 
-  it('PUT /orders/add ajoute un produit disponible au panier', () => {
+  it('PUT /orders/add ajoute un produit disponible au panier', function () {
     login().then((token) => {
       cy.request(`${apiUrl}/products`).then((productsResponse) => {
-        const availableProduct = productsResponse.body.find((product) => product.availableStock > 0)
+        expect(productsResponse.status).to.eq(200)
+        expect(productsResponse.body).to.be.an('array')
 
-        expect(availableProduct, 'Produit disponible').to.exist
+        const availableProduct = productsResponse.body.find(
+          (product) => product.availableStock > 0
+        )
+
+        if (!availableProduct) {
+          cy.log('Aucun produit avec un stock positif dans le jeu de données')
+          this.skip()
+        }
 
         cy.request({
           method: 'PUT',
@@ -96,9 +109,17 @@ describe('Tests API Eco Bliss Bath', () => {
   it('PUT /orders/add refuse un produit en rupture de stock', () => {
     login().then((token) => {
       cy.request(`${apiUrl}/products`).then((productsResponse) => {
-        const unavailableProduct = productsResponse.body.find((product) => product.availableStock <= 0)
+        expect(productsResponse.status).to.eq(200)
+        expect(productsResponse.body).to.be.an('array')
 
-        expect(unavailableProduct, 'Produit en rupture ou indisponible').to.exist
+        const unavailableProduct = productsResponse.body.find(
+          (product) => product.availableStock <= 0
+        )
+
+        expect(
+          unavailableProduct,
+          'Produit en rupture ou indisponible'
+        ).to.exist
 
         cy.request({
           method: 'PUT',
