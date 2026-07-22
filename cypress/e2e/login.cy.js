@@ -1,15 +1,23 @@
 describe('Test fonctionnel - Connexion', () => {
-  it('Un utilisateur connu peut se connecter', () => {
-    cy.intercept('POST', 'http://localhost:8081/login').as('loginRequest')
+  const frontUrl = 'http://localhost:4200'
+  const apiUrl = 'http://localhost:8081'
 
-    cy.visit('http://localhost:8080')
+  it('Un utilisateur connu peut se connecter', () => {
+    cy.intercept('POST', `${apiUrl}/login`).as('loginRequest')
+
+    cy.visit(frontUrl)
 
     cy.contains('Connexion').click()
 
-    cy.get('[data-cy="login-input-username"]').type('test2@test.fr')
-    cy.get('[data-cy="login-input-password"]').type('testtest')
+    cy.get('[data-cy="login-input-username"]')
+      .should('be.visible')
+      .type('test2@test.fr')
 
-    cy.get('[data-cy="login-submit"]').click({ force: true })
+    cy.get('[data-cy="login-input-password"]')
+      .should('be.visible')
+      .type('testtest')
+
+    cy.get('[data-cy="login-submit"]').click()
 
     cy.wait('@loginRequest').then((interception) => {
       expect(interception.response.statusCode).to.eq(200)
@@ -19,5 +27,7 @@ describe('Test fonctionnel - Connexion', () => {
     cy.window().then((window) => {
       expect(window.localStorage.getItem('user')).to.exist
     })
+
+    cy.url().should('not.include', '/login')
   })
 })

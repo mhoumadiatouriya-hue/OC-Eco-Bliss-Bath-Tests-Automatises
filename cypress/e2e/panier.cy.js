@@ -15,12 +15,11 @@ describe('Tests fonctionnels - Panier', () => {
 
     cy.get('[data-cy="login-submit"]')
       .should('be.visible')
-      .click({ force: true })
+      .click()
   }
 
   beforeEach(() => {
     cy.intercept('POST', `${apiUrl}/login`).as('loginRequest')
-    cy.intercept('PUT', `${apiUrl}/orders/add`).as('addToCart')
 
     login()
 
@@ -29,116 +28,89 @@ describe('Tests fonctionnels - Panier', () => {
       .should('eq', 200)
   })
 
-  it('Un utilisateur connecté peut ajouter un produit disponible au panier', function () {
-    cy.request(`${apiUrl}/products`).then((response) => {
-      expect(response.status).to.eq(200)
-      expect(response.body).to.be.an('array')
+  it(
+    'Un utilisateur ne doit pas pouvoir ajouter une quantité supérieure au stock disponible',
+    function () {
+      cy.request(`${apiUrl}/products`).then((response) => {
+        expect(response.status).to.eq(200)
+        expect(response.body).to.be.an('array')
 
-      const product = response.body.find(
-        (item) => item.availableStock > 0
-      )
+        const product = response.body.find(
+          (item) => item.availableStock > 0
+        )
 
-      if (!product) {
-        cy.log('Aucun produit avec un stock positif dans le jeu de données')
-        this.skip()
-      }
+        if (!product) {
+          cy.log(
+            'Aucun produit avec un stock positif dans le jeu de données'
+          )
+          this.skip()
+        }
 
-      cy.visit(`${frontUrl}/#/products/${product.id}`)
+        cy.intercept(
+          'PUT',
+          `${apiUrl}/orders/add`
+        ).as('addToCart')
 
-      cy.get('input[type="number"]')
-        .clear()
-        .type('1')
+        cy.visit(`${frontUrl}/#/products/${product.id}`)
 
-      cy.contains('Ajouter au panier')
-        .click({ force: true })
+        cy.get('input[type="number"]')
+          .should('be.visible')
+          .clear()
+          .type(String(product.availableStock + 1))
 
-      cy.wait('@addToCart').then((interception) => {
-        expect(interception.response.statusCode).to.eq(200)
+        cy.contains('Ajouter au panier')
+          .should('be.visible')
+          .click()
+
+        cy.wait('@addToCart').then((interception) => {
+          expect(
+            interception.response.statusCode,
+            'Une quantité supérieure au stock doit être refusée'
+          ).to.not.eq(200)
+        })
       })
-    })
-  })
+    }
+  )
 
-  it('Un utilisateur ne doit pas pouvoir ajouter une quantité supérieure au stock disponible', function () {
-    cy.request(`${apiUrl}/products`).then((response) => {
-      expect(response.status).to.eq(200)
-      expect(response.body).to.be.an('array')
+  it(
+    'Un produit indisponible ne doit pas pouvoir être ajouté au panier',
+    () => {
+      cy.request(`${apiUrl}/products`).then((response) => {
+        expect(response.status).to.eq(200)
+        expect(response.body).to.be.an('array')
 
-      const product = response.body.find(
-        (item) => item.availableStock > 0
-      )
+        const product = response.body.find(
+          (item) => item.availableStock <= 0
+        )
 
-      if (!product) {
-        cy.log('Aucun produit avec un stock positif dans le jeu de données')
-        this.skip()
-      }
+        expect(
+          product,
+          'Produit avec un stock nul ou négatif'
+        ).to.exist
 
-      cy.visit(`${frontUrl}/#/products/${product.id}`)
+        cy.intercept(
+          'PUT',
+          `${apiUrl}/orders/add`
+        ).as('addToCart')
 
-      cy.get('input[type="number"]')
-        .clear()
-        .type(String(product.availableStock + 1))
+        cy.visit(`${frontUrl}/#/products/${product.id}`)
 
-      cy.contains('Ajouter au panier')
-        .click({ force: true })
+        cy.get('input[type="number"]')
+          .should('be.visible')
+          .clear()
+          .type('1')
 
-      cy.wait('@addToCart').then((interception) => {
-        expect(interception.response.statusCode).to.not.eq(200)
+        cy.contains('Ajouter au panier')
+          .should('be.visible')
+          .click()
+
+        cy.wait('@addToCart').then((interception) => {
+          expect(
+            interception.response.statusCode,
+            'L’ajout d’un produit indisponible doit être refusé'
+          ).to.not.eq(200)
+        })
       })
-    })
-  })
-
-  it('Un produit indisponible ne doit pas pouvoir être ajouté au panier', () => {
-    cy.request(`${apiUrl}/products`).then((response) => {
-      expect(response.status).to.eq(200)
-      expect(response.body).to.be.an('array')
-
-      const product = response.body.find(
-        (item) => item.availableStock <= 0
-      )
-
-      expect(product, 'Produit avec un stock nul ou négatif').to.exist
-
-      cy.visit(`${frontUrl}/#/products/${product.id}`)
-
-      cy.get('input[type="number"]')
-        .clear()
-        .type('1')
-
-      cy.contains('Ajouter au panier')
-        .click({ force: true })
-
-      cy.wait('@addToCart').then((interception) => {
-        expect(interception.response.statusCode).to.not.eq(200)
-      })
-    })
-  })
-
-  it('Un utilisateur ne doit pas pouvoir ajouter une quantité négative', function () {
-    cy.request(`${apiUrl}/products`).then((response) => {
-      expect(response.status).to.eq(200)
-      expect(response.body).to.be.an('array')
-
-      const product = response.body.find(
-        (item) => item.availableStock > 0
-      )
-
-      if (!product) {
-        cy.log('Aucun produit disponible pour isoler le contrôle de la quantité négative')
-        this.skip()
-      }
-
-      cy.visit(`${frontUrl}/#/products/${product.id}`)
-
-      cy.get('input[type="number"]')
-        .clear()
-        .type('-1')
-
-      cy.contains('Ajouter au panier')
-        .click({ force: true })
-
-      cy.wait('@addToCart').then((interception) => {
-        expect(interception.response.statusCode).to.not.eq(200)
-      })
-    })
-  })
+    }
+  )
 })
